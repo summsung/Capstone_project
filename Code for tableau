@@ -1,0 +1,169 @@
+#Let start by install packages
+install.packages("tidyverse")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("lubridate")
+install.packages("hms")
+install.packages("data.table")
+
+#Load libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(hms)
+library(data.table)
+
+#Load .csv files a years worth of data from April 2022 to March 2023
+Apr22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202204-divvy-tripdata.csv")
+May22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202205-divvy-tripdata.csv")
+Jun22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202206-divvy-tripdata.csv")
+Jul22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202207-divvy-tripdata.csv")
+Aug22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202208-divvy-tripdata.csv")
+Sep22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202209-divvy-tripdata.csv")
+Oct22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202210-divvy-tripdata.csv") 
+Nov22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202211-divvy-tripdata.csv")
+Dec22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202212-divvy-tripdata.csv")
+Jan23 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202301-divvy-tripdata.csv")
+Feb23 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202302-divvy-tripdata.csv")
+Mar23 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202303-divvy-tripdata.csv")
+
+#Merge into one data frame
+raw_data <- rbind(Apr22,May22,Jun22,Jul22,Aug22,Sep22,Oct22,Nov22,Dec22,Jan23,Feb23,Mar23)
+
+#Clear space form environment
+remove(Apr22,May22,Jun22,Jul22,Aug22,Sep22,Oct22,Nov22,Dec22,Jan23,Feb23,Mar23)
+
+#Cleaning and Preparing Data
+glimpse(raw_data) 
+nrow(raw_data)
+ncol(raw_data)
+head(raw_data)
+str(raw_data)
+summary(raw_data)
+colnames(raw_data)
+
+#Checking and removing NA
+dim(raw_data[duplicated(raw_data$ride_id),])[1] #Check if any duplicate ride_id is appear as they should be unique
+sum(is.na(raw_data))
+raw_data <- na.omit(raw_data)
+unique(raw_data$rideable_type) #Confirming unique values ("classic_bike" "electric_bike" "docked_bike")
+unique(raw_data$member_casual) #Confirming unique values ("member" "casual")
+mutate(raw_data, 
+       end_station_id = as.character(end_station_id),
+       start_station_id = as.character(start_station_id)) #Ensure all station_id's are characters
+
+#Create new data frame to contain new columns
+date_data <- data.frame(raw_data)
+#Calculate ride length by subtracting ended_at time from started_at time and converted to minutes
+date_data$ride_length <- difftime(date_data$ended_at, date_data$started_at, units = "mins")
+
+#Checking consistency of ride length and ride ID 
+date_data <- date_data %>% 
+  filter(ride_length > 0) 
+sum(duplicated(date_data$ride_id))
+
+#Create new columns for time, day of week, day, year, month, week and hour
+date_data$date <-as.Date(date_data$started_at)
+date_data$time <- format(as.POSIXct(date_data$started_at),format = "%H:%M:%S")
+date_data$day_of_week <- wday(date_data$started_at)
+date_data$day_of_week <- format(as.Date(date_data$date), "%A")
+date_data$day_of_week <- ordered(date_data$day_of_week,
+                                 levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+date_data$day <- format(as.Date(date_data$date), "%d")
+date_data$year <- format(as.Date(date_data$date), "%Y")
+date_data$month <- format(as.Date(date_data$date), "%m")
+date_data$week <- format(as.Date(date_data$date), "%W")
+date_data$hour <- format(as.POSIXct(date_data$started_at),format = "%H")
+
+#Created column
+date_data$ride_length_seconds <- difftime(date_data$ended_at, date_data$started_at) #For ride length in seconds
+date_data$started_at_time <- format(as.POSIXct(
+  date_data$started_at), format = "%H:%M:%S") #For ride start time
+date_data$ended_at_time <- format(as.POSIXct(
+  date_data$ended_at), format = "%H:%M:%S") #For ride end time
+date_data$ride_length_seconds <- as.numeric(str_extract(date_data$ride_length_seconds, "[0-9]+")) #Remove "sec" from ride length seconds
+date_data$ride_length <- as.numeric(str_extract(date_data$ride_length, "[0-9]+")) #Remove "mins" from ride length
+date_data$ride_length_minutes <- (date_data$ride_length_seconds / 60)
+
+#Create column for different seasons
+date_data <- date_data %>% mutate(
+  season = case_when( 
+    month == "04" ~ "Spring",
+    month == "05" ~ "Spring",
+    month == "06"  ~ "Summer",
+    month == "07"  ~ "Summer",
+    month == "08"  ~ "Summer",
+    month == "09" ~ "Fall",
+    month == "10" ~ "Fall",
+    month == "11" ~ "Fall",
+    month == "12" ~ "Winter",
+    month == "01" ~ "Winter",
+    month == "02" ~ "Winter",
+    month == "03" ~ "Spring"
+  )
+)
+
+#Create column for each time of day
+date_data <- date_data %>% mutate(
+  time_of_day = case_when(
+    hour == "00" ~ "Night",
+    hour == "01" ~ "Night",
+    hour == "02" ~ "Night",
+    hour == "03" ~ "Night",
+    hour == "04" ~ "Night",
+    hour == "05" ~ "Night",
+    hour == "06" ~ "Morning",
+    hour == "07" ~ "Morning",
+    hour == "08" ~ "Morning",
+    hour == "09" ~ "Morning",
+    hour == "10" ~ "Morning",
+    hour == "11" ~ "Morning",
+    hour == "12" ~ "Afternoon",
+    hour == "13" ~ "Afternoon",
+    hour == "14" ~ "Afternoon",
+    hour == "15" ~ "Afternoon",
+    hour == "16" ~ "Afternoon",
+    hour == "17" ~ "Afternoon",
+    hour == "18" ~ "Evening",
+    hour == "19" ~ "Evening",
+    hour == "20" ~ "Evening",
+    hour == "21" ~ "Evening",
+    hour == "22" ~ "Evening",
+    hour == "23" ~ "Evening")
+)
+#Create column for month name
+date_data <- date_data %>% mutate(
+  Month = case_when( 
+    month == "01" ~ "January",
+    month == "02" ~ "Febuary",
+    month == "03"  ~ "March",
+    month == "04"  ~ "April",
+    month == "05"  ~ "May",
+    month == "06" ~ "June",
+    month == "07" ~ "July",
+    month == "08" ~ "August",
+    month == "09" ~ "September",
+    month == "10" ~ "October",
+    month == "11" ~ "November",
+    month == "12" ~ "December"
+  )
+)
+
+#Cleaning the data
+date_data <- na.omit(date_data)
+dim(date_data[duplicated(date_data$ride_id),])[1]
+date_data <- date_data[!(date_data$ride_length <=0),]
+date_data <- date_data %>% 
+  select(-c(ride_id, start_station_id, end_station_id, ride_length, start_lat, start_lng, end_lat, end_lng)) #Remove column not need
+
+#Clean the data to use in Tableau
+tableau_date <- date_data
+tableau_date <- tableau_date %>% 
+  select(-c(start_station_name, end_station_name, time, started_at, ended_at))
+#save as .csv file 
+fwrite(tableau_date,"tableau_date_data_1.csv")
+fwrite(date_data,"date_data1.csv")
+#Check our final data
+View(date_data)
+nrow(date_data) #Total number of rides in our data
