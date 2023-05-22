@@ -1,0 +1,566 @@
+#Let start by install packages
+install.packages("tidyverse")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("lubridate")
+install.packages("hms")
+install.packages("data.table")
+
+#Load libraries
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(hms)
+library(data.table)
+
+#Load .csv files a years worth of data from April 2022 to March 2023
+Apr22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202204-divvy-tripdata.csv")
+May22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202205-divvy-tripdata.csv")
+Jun22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202206-divvy-tripdata.csv")
+Jul22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202207-divvy-tripdata.csv")
+Aug22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202208-divvy-tripdata.csv")
+Sep22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202209-divvy-tripdata.csv")
+Oct22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202210-divvy-tripdata.csv") 
+Nov22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202211-divvy-tripdata.csv")
+Dec22 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202212-divvy-tripdata.csv")
+Jan23 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202301-divvy-tripdata.csv")
+Feb23 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202302-divvy-tripdata.csv")
+Mar23 <- read.csv("/Users/Summsung/Desktop/Project_bike/bike_data_12month/202303-divvy-tripdata.csv")
+
+#Merge into one data frame
+raw_data <- rbind(Apr22,May22,Jun22,Jul22,Aug22,Sep22,Oct22,Nov22,Dec22,Jan23,Feb23,Mar23)
+
+#Clear space form environment
+remove(Apr22,May22,Jun22,Jul22,Aug22,Sep22,Oct22,Nov22,Dec22,Jan23,Feb23,Mar23)
+
+#Cleaning and Preparing Data
+glimpse(raw_data) 
+nrow(raw_data)
+ncol(raw_data)
+head(raw_data)
+str(raw_data)
+summary(raw_data)
+colnames(raw_data)
+
+#Checking and removing NA
+dim(raw_data[duplicated(raw_data$ride_id),])[1] #Check if any duplicate ride_id is appear as they should be unique
+sum(is.na(raw_data))
+raw_data <- na.omit(raw_data)
+unique(raw_data$rideable_type) #Confirming unique values ("classic_bike" "electric_bike" "docked_bike")
+unique(raw_data$member_casual) #Confirming unique values ("member" "casual")
+mutate(raw_data, 
+       end_station_id = as.character(end_station_id),
+       start_station_id = as.character(start_station_id)) #Ensure all station_id's are characters
+
+#Create new data frame to contain new columns
+date_data <- data.frame(raw_data)
+#Calculate ride length by subtracting ended_at time from started_at time and converted to minutes
+date_data$ride_length <- difftime(date_data$ended_at, date_data$started_at, units = "mins")
+
+#Checking consistency of ride length and ride ID 
+date_data <- date_data %>% 
+  filter(ride_length > 0) 
+sum(duplicated(date_data$ride_id))
+
+#Create new columns for time, day of week, day, year, month, week and hour
+date_data$date <-as.Date(date_data$started_at)
+date_data$time <- format(as.POSIXct(date_data$started_at),format = "%H:%M:%S")
+date_data$day_of_week <- wday(date_data$started_at)
+date_data$day_of_week <- format(as.Date(date_data$date), "%A")
+date_data$day_of_week <- ordered(date_data$day_of_week,
+                                 levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+date_data$day <- format(as.Date(date_data$date), "%d")
+date_data$year <- format(as.Date(date_data$date), "%Y")
+date_data$month <- format(as.Date(date_data$date), "%m")
+date_data$week <- format(as.Date(date_data$date), "%W")
+date_data$hour <- format(as.POSIXct(date_data$started_at),format = "%H")
+
+#Created column
+date_data$ride_length_seconds <- difftime(date_data$ended_at, date_data$started_at) #For ride length in seconds
+date_data$started_at_time <- format(as.POSIXct(
+  date_data$started_at), format = "%H:%M:%S") #For ride start time
+date_data$ended_at_time <- format(as.POSIXct(
+  date_data$ended_at), format = "%H:%M:%S") #For ride end time
+date_data$ride_length_seconds <- as.numeric(str_extract(date_data$ride_length_seconds, "[0-9]+")) #Remove "sec" from ride length seconds
+date_data$ride_length <- as.numeric(str_extract(date_data$ride_length, "[0-9]+")) #Remove "mins" from ride length
+date_data$ride_length_minutes <- (date_data$ride_length_seconds / 60)
+
+#Create column for different seasons
+date_data <- date_data %>% mutate(
+  season = case_when( 
+    month == "04" ~ "Spring",
+    month == "05" ~ "Spring",
+    month == "06"  ~ "Summer",
+    month == "07"  ~ "Summer",
+    month == "08"  ~ "Summer",
+    month == "09" ~ "Fall",
+    month == "10" ~ "Fall",
+    month == "11" ~ "Fall",
+    month == "12" ~ "Winter",
+    month == "01" ~ "Winter",
+    month == "02" ~ "Winter",
+    month == "03" ~ "Spring"
+  )
+)
+
+#Create column for each time of day
+date_data <- date_data %>% mutate(
+  time_of_day = case_when(
+    hour == "00" ~ "Night",
+    hour == "01" ~ "Night",
+    hour == "02" ~ "Night",
+    hour == "03" ~ "Night",
+    hour == "04" ~ "Night",
+    hour == "05" ~ "Night",
+    hour == "06" ~ "Morning",
+    hour == "07" ~ "Morning",
+    hour == "08" ~ "Morning",
+    hour == "09" ~ "Morning",
+    hour == "10" ~ "Morning",
+    hour == "11" ~ "Morning",
+    hour == "12" ~ "Afternoon",
+    hour == "13" ~ "Afternoon",
+    hour == "14" ~ "Afternoon",
+    hour == "15" ~ "Afternoon",
+    hour == "16" ~ "Afternoon",
+    hour == "17" ~ "Afternoon",
+    hour == "18" ~ "Evening",
+    hour == "19" ~ "Evening",
+    hour == "20" ~ "Evening",
+    hour == "21" ~ "Evening",
+    hour == "22" ~ "Evening",
+    hour == "23" ~ "Evening")
+)
+
+#Cleaning the data
+date_data <- na.omit(date_data)
+dim(date_data[duplicated(date_data$ride_id),])[1]
+date_data <- date_data[!(date_data$ride_length <=0),]
+date_data <- date_data %>% 
+  select(-c(ride_id, start_station_id, end_station_id, ride_length, start_lat, start_lng, end_lat, end_lng)) #Remove column not need
+
+#Check our final data
+View(date_data)
+nrow(date_data) #Total number of rides in our data
+
+#Compare different between member and casual
+date_data %>% 
+  group_by(member_casual) %>%
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n))
+ggplot(data = date_data, mapping = aes(x = member_casual, fill = member_casual)) + geom_bar() + labs(title = "Member Vs Casual")
+
+#Compare total ride of bike by member type
+date_data %>% 
+  group_by(member_casual, rideable_type) %>% 
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n))
+#Compare total type of bike used by member and casual
+date_data %>% 
+  group_by(rideable_type, member_casual) %>% 
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n))
+
+#Comparing type of bike
+date_data %>% 
+  group_by(rideable_type) %>% 
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n))
+ggplot(data = date_data, mapping = aes(x = rideable_type, fill = rideable_type)) + geom_bar() + labs(title = "Bike Types used")
+
+#Comparing time when bike was used by member type
+date_data %>% 
+  group_by(member_casual) %>% 
+  count(hour) %>%
+  mutate(percent = n*100/sum(n)) %>% 
+  print(n = 48)
+
+#Comparing time when bike was used
+date_data %>%
+  group_by(hour) %>% 
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n)) %>% 
+  print(n = 24)
+ggplot(data = date_data, mapping = aes(x = hour, fill = hour)) + geom_bar() + labs(title = "Period of time bike was used ")
+
+#Total ride in the morning by member and casual
+date_data %>%
+  group_by(time_of_day, member_casual) %>% 
+  filter(time_of_day == "Morning") %>%
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n))
+
+#Total ride in the morning
+date_data %>% 
+  filter(time_of_day == "Morning") %>% 
+  count(time_of_day)
+
+#Total ride in the afternoon by member and casual
+date_data %>% 
+  group_by(time_of_day, member_casual) %>% 
+  filter(time_of_day == "Afternoon") %>% 
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n)) 
+
+#Total ride in the afternoon
+date_data %>% 
+  filter(time_of_day == "Afternoon") %>% 
+  count(time_of_day)
+
+#Total ride in the evening by member and casual
+date_data %>%
+  group_by(time_of_day, member_casual) %>% 
+  filter(time_of_day == "Evening") %>% 
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n))
+
+#Total ride in the evening
+date_data %>% 
+  filter(time_of_day == "Evening") %>% 
+  count(time_of_day)
+
+#Total ride in the night by member and casual
+date_data %>% 
+  group_by(time_of_day, member_casual) %>% 
+  filter(time_of_day == "Night") %>% 
+  summarise(n=n()) %>%
+  mutate(percent = n*100/sum(n))
+
+#Total ride in the night
+date_data %>% 
+  filter(time_of_day == "Night") %>% 
+  count(time_of_day)
+
+#All times of day
+#Total rides by member type
+date_data %>% 
+  group_by(member_casual) %>% 
+  count(time_of_day) %>%
+  mutate(percent = n*100/sum(n))
+
+#Number of rides in each time of day
+date_data %>% 
+  group_by(time_of_day) %>% 
+  summarise(n=n()) %>% 
+  mutate(percent = n*100/sum(n))
+
+#Day of the week
+#Total rides day of week by member type
+date_data %>%  
+  group_by(member_casual, day_of_week) %>% 
+  summarise(n=n()) %>% 
+  mutate(percent = n*100/sum(n))
+
+#Total rides day of week
+date_data %>%  
+  group_by(day_of_week) %>% 
+  summarise(n=n()) %>% 
+  mutate(percent = n*100/sum(n))
+
+#Day of the month 
+#Total rides in day of the month by member type
+date_data %>% 
+  group_by(member_casual, day) %>% 
+  summarise(n=n()) %>% 
+  mutate(percent = n*100/sum(n)) %>% 
+  print(n = 62)
+
+#Total rides in day of the month
+date_data %>%
+  group_by(day) %>% 
+  summarise(n=n()) %>% 
+  mutate(percent = n*100/sum(n)) %>%
+  print(n = 31)
+
+#Month
+#Total rides in month by member type
+date_data %>% 
+  group_by(member_casual, month) %>% 
+  summarise(n=n()) %>% 
+  mutate(percent = n*100/sum(n)) %>%
+  print(n = 24)
+
+#Total rides in month
+date_data %>% 
+  group_by(month) %>%
+  summarise(n=n()) %>% 
+  mutate(percent = n*100/sum(n)) %>%
+  print(n = 31)
+
+#Season
+#Spring
+#Total rides in Spring by member type
+date_data %>% 
+  group_by(season, member_casual) %>% 
+  filter(season == "Spring") %>% 
+  summarise(n=n()) %>%  
+  mutate(percent = n*100/sum(n))
+
+#Total rides in Spring
+date_data %>% 
+  filter(season == "Spring") %>%
+  count(season)
+
+#Summer 
+#Total rides in Summer by member type
+date_data %>% 
+  group_by(season, member_casual) %>% 
+  filter(season == "Summer") %>% 
+  summarise(n=n()) %>%  
+  mutate(percent = n*100/sum(n))
+
+#Total rides in Summer
+date_data %>% 
+  filter(season == "Summer") %>% 
+  count(season)
+
+#Fall
+#Total rides in Fall by member type
+date_data %>% 
+  group_by(season, member_casual) %>% 
+  filter(season == "Fall") %>% 
+  summarise(n=n()) %>%  
+  mutate(percent = n*100/sum(n))
+
+#Total rides in Fall
+date_data %>% 
+  filter(season == "Fall") %>% 
+  count(season)
+
+#Winter
+#Total rides in Winter by member type
+date_data %>% 
+  group_by(season, member_casual) %>% 
+  filter(season == "Winter") %>% 
+  summarise(n=n()) %>%  
+  mutate(percent = n*100/sum(n))
+
+#Total rides in Winter
+date_data %>% 
+  filter(season == "Winter") %>% 
+  count(season)
+
+#All season
+#Total rides in each season by member type
+date_data %>% 
+  group_by(season, member_casual) %>%
+  summarise(n=n()) %>%  
+  mutate(percent = n*100/sum(n))
+
+#Total rides in each season
+date_data %>% 
+  group_by(season) %>% 
+  summarise(n=n()) %>%  
+  mutate(percent = n*100/sum(n))
+
+#Average of ride length
+mean(date_data$ride_length_minutes)
+
+#Member type
+#Average ride length member and casual
+date_data %>% 
+  group_by(member_casual) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Type of bike
+#Average ride length in each type of bike by member
+date_data %>%  
+  group_by(member_casual, rideable_type) %>%
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Average rides length in each type of bike
+date_data %>% 
+  group_by(rideable_type) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Hour
+#Average ride length at each hour by member type
+date_data %>% 
+  group_by(hour, member_casual) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean)) %>% 
+  print(n = 48)
+
+#Average ride length at each hour
+date_data %>% 
+  group_by(hour) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean)) %>% 
+  print(n = 24)
+
+#Morning
+#Average ride length in the Morning by member type
+date_data %>% 
+  group_by(member_casual) %>% 
+  filter(time_of_day == "Morning") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Average ride length in the Morning
+date_data %>% 
+  filter(time_of_day == "Morning") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Afternoon
+#Average ride length in the Afternoon by member type
+date_data %>% 
+  group_by(member_casual) %>% 
+  filter(time_of_day == "Afternoon") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Average ride length in the Afternoon
+date_data %>% 
+  filter(time_of_day == "Afternoon") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Evening
+#Average ride length in the Evening by member type
+date_data %>% 
+  group_by(member_casual) %>% 
+  filter(time_of_day == "Evening") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Average ride length in the Evening
+date_data %>% 
+  filter(time_of_day == "Evening") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Night
+#Average ride length in the Night by member type
+date_data %>% 
+  group_by(member_casual) %>% 
+  filter(time_of_day == "Night") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Average ride length in the Night
+date_data %>% 
+  filter(time_of_day == "Night") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#All times of day
+#Average ride length in each time of day by member type
+date_data %>% 
+  group_by(time_of_day, member_casual) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))  
+
+#Average ride length in each time of day 
+date_data %>% 
+  group_by(time_of_day) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Day of week
+#Average ride length in each day of week by member type 
+date_data %>% 
+  group_by(member_casual, day_of_week) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Average ride length in each day of week
+date_data %>% 
+  group_by(day_of_week) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Day of the month
+#Average ride length in each day of month by member type
+date_data %>% 
+  group_by(day, member_casual) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean)) %>% 
+  print(n = 62)
+#Average ride length in each day of month
+date_data %>% 
+  group_by(day) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean)) %>% 
+  print(n = 31)
+
+#Month
+#Average ride length in each month by member type
+date_data %>% 
+  group_by(month, member_casual) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean)) %>% 
+  print(n = 24)
+
+#Average ride length in each month
+date_data %>% 
+  group_by(month) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean)) %>%
+  print(n = 12)
+
+#Spring
+#Average ride length in spring by member type
+date_data %>% 
+  group_by(member_casual, season) %>% 
+  filter(season == "Spring") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Average ride length in spring 
+date_data %>% 
+  filter(season == "Spring") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Summer
+#Average ride length in summer by member type
+date_data %>% 
+  group_by(member_casual, season) %>% 
+  filter(season == "Summer") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Average ride length in summer
+date_data %>% 
+  filter(season == "Summer") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Fall
+#Average ride length in fall by member type
+date_data %>% 
+  group_by(member_casual, season) %>% 
+  filter(season == "Fall") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Average ride length in fall
+date_data %>% 
+  filter(season == "Fall") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Winter
+#Average ride_length in winter by member type 
+date_data %>% 
+  group_by(member_casual, season) %>% 
+  filter(season == "Winter") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#Average ride length in winter
+date_data %>% 
+  filter(season == "Winter") %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+#All season
+#Average ride length in each season by member type
+date_data %>% 
+  group_by(season, member_casual) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+#Average ride length in each season
+date_data %>% 
+  group_by(season) %>% 
+  summarise_at(vars(ride_length_minutes),
+               list(time = mean))
+
+
